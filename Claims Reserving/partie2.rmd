@@ -1,0 +1,835 @@
+---
+title: "Projet Auto Actuariat"
+output:
+  html_document: default
+  word_document: default
+---
+
+# Importation des données des contrats et des sinistres:
+
+```{r}
+contrat <- read.csv("D:\\5DS\\actuariat\\Auto\\contratUdM.txt", sep=";")
+head(contrat)
+summary(contrat)
+str(contrat)
+
+sinistre <- read.csv("D:\\5DS\\actuariat\\Auto\\sinistreUdM.txt", sep=";")
+head(sinistre)
+summary(sinistre)
+str(sinistre)
+```
+
+## Traiter une seule garantie
+
+```{r}
+sinistre=sinistre[sinistre$garantie=="4BG",]
+```
+
+## Frequence des contrats dans la table sinistre
+
+```{r}
+Freq_contrat<-table(sinistre$nocontrat)
+
+head(Freq_contrat)
+```
+
+## Convertir Names(T)=Nocotract en type numerique
+
+```{r}
+header_Freq_contrat<-as.numeric(names(Freq_contrat))
+```
+
+## Convertir en type numérique les frequences
+
+```{r}
+Valeurs_Freq_contrat<-as.numeric(Freq_contrat)
+```
+
+
+## Combiner les deux vecteurs en une seule data frame : nombre 1 est une data frame qui contient le nombre de sinistres pour chaque contrat
+
+```{r}
+
+Freq_contrat <- data.frame(nocontrat=header_Freq_contrat,nbre=Valeurs_Freq_contrat)
+head(Freq_contrat)
+```
+
+## Créer une variable boléenne qui teste l'existence des Numeros de contrat de la table contrat dans la table T1(T1:les numéros de contrat distincts de la table sinistres) )
+```{r}
+
+I <- contrat$nocontrat%in%header_Freq_contrat 
+# liste des contrats sans aucun sinistre
+head(I)
+```
+
+## Extraire les contrats avec 0 sinistres et former la table aucun sinistre
+
+```{r}
+
+header_Freq_contrat<-contrat$nocontrat[I==FALSE]
+aucun_sinistre <- data.frame(nocontrat=header_Freq_contrat,nbre=0)
+```
+
+
+## Combiner les contats non sinistrés et les contrats sinistrés 
+
+```{r}
+nombre<-rbind(Freq_contrat,aucun_sinistre)
+```
+
+## Joindre la table contrat avec la table nombre (Rq: dans les cas simples : la fonction merge trouve l'intersection entre les deux tables )
+
+```{r}
+
+baseFREQ <- merge(contrat,nombre)
+head(baseFREQ)
+```
+
+## Former la table baseCOUT : trouver le cout de chaque contrat sinistré 
+
+```{r}
+baseCOUT <- merge(sinistre,contrat)
+head(baseCOUT)
+```
+
+# Traitement des données:
+
+## Detection des anomalies
+
+```{r}
+summary(baseCOUT)
+```
+
+## Tester l'existence des redondances:
+
+```{r}
+
+n_occur <- data.frame(table(baseCOUT$nocontrat))
+n_occur[n_occur$Freq > 1,]
+```
+## Traiter les redondances
+
+```{r}
+
+#Somme de cout par contrat
+baseCOU<-aggregate(baseCOUT$cout, by=list(Category=baseCOUT$nocontrat), FUN=sum)
+#dEnomination des noms des variables
+baseCOU <- data.frame(nocontrat=baseCOU$Category,cout=baseCOU$x)
+head(baseCOU)
+```
+
+## Ajouter les colonnes a la base des contrats uniques
+
+
+```{r}
+
+#la commande match renvoie un vecteur des positions des (premiÃ¨res) correspondances de son premier argument dans son second.
+baseCOU$exposition <- baseCOUT$exposition[match(baseCOU$nocontrat,baseCOUT$nocontrat)] 
+baseCOU$zone <- baseCOUT$zone[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$puissance <- baseCOUT$puissance[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$agevehicule<- baseCOUT$agevehicule[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$ageconducteur <- baseCOUT$ageconducteur[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$bonus <- baseCOUT$bonus[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$marque <- baseCOUT$marque[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$carburant<- baseCOUT$carburant[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$densite <- baseCOUT$densite[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+baseCOU$region <- baseCOUT$region[match(baseCOU$nocontrat,baseCOUT$nocontrat)]
+head(baseCOU)
+```
+
+## Décoder les modalités de la variable marque en classes (voiture_pop, marque_haute_gamme,marque_non_connue)
+
+```{r}
+
+baseCOU$marque[baseCOU$marque == 1] <- "Voiture_pop"
+baseCOU$marque[baseCOU$marque == 2] <- "Voiture_pop"
+baseCOU$marque[baseCOU$marque == 3] <- "marque_haute_gamme"
+baseCOU$marque[baseCOU$marque == 4] <- "Voiture_pop"
+baseCOU$marque[baseCOU$marque == 5] <- "Voiture_pop"
+baseCOU$marque[baseCOU$marque == 6] <- "Voiture_pop"
+baseCOU$marque[baseCOU$marque == 10] <- "marque_haute_gamme"
+baseCOU$marque[baseCOU$marque == 11] <- "marque_haute_gamme"
+baseCOU$marque[baseCOU$marque == 12] <- "marque_non_connue"
+baseCOU$marque[baseCOU$marque == 13] <- "marque_non_connue"
+baseCOU$marque[baseCOU$marque == 14] <-"marque_non_connue"
+```
+
+
+## Deplacer les valeurs de la colonne densitE dans la baseCOU
+
+```{r}
+
+#DEnomination des modalitEs de la variable region 
+baseCOU$region[baseCOU$region == -1] <- 'R_-1'
+baseCOU$region[baseCOU$region == 0] <- 'R_0'
+baseCOU$region[baseCOU$region == 1] <- 'R_1'
+baseCOU$region[baseCOU$region == 2] <- 'R_2'
+baseCOU$region[baseCOU$region == 3] <- 'R_3'
+baseCOU$region[baseCOU$region == 4] <- 'R_4'
+baseCOU$region[baseCOU$region == 5] <- 'R_5'
+baseCOU$region[baseCOU$region == 6] <- 'R_6'
+baseCOU$region[baseCOU$region == 7] <- 'R_7'
+baseCOU$region[baseCOU$region == 8] <- 'R_8'
+baseCOU$region[baseCOU$region == 9] <- 'R_9'
+baseCOU$region[baseCOU$region == 10] <- 'R_10'
+baseCOU$region[baseCOU$region == 11] <- 'R_11'
+baseCOU$region[baseCOU$region == 12] <- 'R_12'
+baseCOU$region[baseCOU$region == 13] <- 'R_13'
+
+
+head(baseCOU)
+
+n_occur <- data.frame(table(baseFREQ$nocontrat))
+n_occur[n_occur$Freq > 1,]
+
+
+baseFREQ=baseFREQ[!(baseFREQ$agevehicule >68 ), ]
+
+```
+
+
+##Deplacer les valeurs de la colonne marque dans la baseFREQ  en classes (voiture_pop, marque_haute_gamme,marque_non_connue)
+
+```{r}
+baseFREQ$marque[baseFREQ$marque == 1] <- "Voiture_pop"
+baseFREQ$marque[baseFREQ$marque == 2] <- "Voiture_pop"
+baseFREQ$marque[baseFREQ$marque == 3] <- "marque_haute_gamme"
+baseFREQ$marque[baseFREQ$marque == 4] <- "Voiture_pop"
+baseFREQ$marque[baseFREQ$marque == 5] <- "Voiture_pop"
+baseFREQ$marque[baseFREQ$marque == 6] <- "Voiture_pop"
+baseFREQ$marque[baseFREQ$marque == 10] <- " marque_haute_gamme"
+baseFREQ$marque[baseFREQ$marque == 11] <- "marque_haute_gamme"
+baseFREQ$marque[baseFREQ$marque == 12] <- "marque_non_connue"
+baseFREQ$marque[baseFREQ$marque == 13] <- "marque_non_connue"
+baseFREQ$marque[baseFREQ$marque == 14] <-"marque_non_connue"
+
+```
+
+
+##Deplacer les valeurs de la colonne densitE dans la basefreq
+
+```{r}
+#DEnomination des modalitEs de la variable region 
+baseFREQ$region[baseFREQ$region == -1] <- 'R_-1'
+baseFREQ$region[baseFREQ$region == 0] <- 'R_0'
+baseFREQ$region[baseFREQ$region == 1] <- 'R_1'
+baseFREQ$region[baseFREQ$region == 2] <- 'R_2'
+baseFREQ$region[baseFREQ$region == 3] <- 'R_3'
+baseFREQ$region[baseFREQ$region == 4] <- 'R_4'
+baseFREQ$region[baseFREQ$region == 5] <- 'R_5'
+baseFREQ$region[baseFREQ$region == 6] <- 'R_6'
+baseFREQ$region[baseFREQ$region == 7] <- 'R_7'
+baseFREQ$region[baseFREQ$region == 8] <- 'R_8'
+baseFREQ$region[baseFREQ$region == 9] <- 'R_9'
+baseFREQ$region[baseFREQ$region == 10] <- 'R_10'
+baseFREQ$region[baseFREQ$region == 11] <- 'R_11'
+baseFREQ$region[baseFREQ$region == 12] <- 'R_12'
+baseFREQ$region[baseFREQ$region == 13] <- 'R_13'
+
+head(baseCOU)
+head(baseFREQ)
+
+```
+
+# Analyse graphique pour identifier la structure du portefeuille
+
+```{r}
+
+######################Histogramme des variables liees au bien assure###############
+
+
+#Histogramme presentant la frequence de sinistres par marque de voiture
+par(mfrow=c(3,3))
+hist(baseCOUT$marque,
+     main="Frequence par marque de voiture",
+     xlab="Marque",
+     freq = FALSE,
+     border="black",
+     col="red3",
+     xlim=c(1,14),
+     las=1,
+     breaks=7)
+
+
+
+base_T<-baseFREQ
+##Barlot presentant le nombre de sinistres par marque de voiture
+A<-aggregate(base_T$nbre, by=list(Category=base_T$marque), FUN=sum)
+barplot(A$x, names.arg=A$Category, main ="Nbre par marque de voiture",ylab="Nbre Sinistres", xlab="Marque",col="red3")
+
+base_T<-baseCOU
+##Barlot presentant le cout de sinistres par marque de voiture
+A<-aggregate(base_T$cout, by=list(Category=base_T$marque), FUN=sum)
+barplot(A$x, names.arg=A$Category, main="Cout par marque de voiture" ,ylab="cout", xlab="Marque",col="red3")
+
+#histogramme presentant la frequence de sinistres selon l'age de vehicule
+hist(base_T$agevehicule, 
+     main="Frequence selon l'age de vehicule", 
+     xlab="Age Vehicule", 
+     border="black", 
+     col="red3",axes = F)
+axis(2)
+axis(1, at=seq(0,20, by=1), labels=seq(0,20, by=1))
+
+   
+
+##Barlot presentant le nombre de sinistres par age de voiture
+base_T<-baseFREQ
+A<-aggregate(base_T$nbre, by=list(Category=base_T$agevehicule), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Nbre par age de voiture", ylab="Nbre sinistres", xlab="Age Vehicule",col="red3")
+
+##Barlot presentant le cout de sinistres par age de voiture
+base_T<-baseCOU
+A<-aggregate(base_T$cout, by=list(Category=base_T$agevehicule), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Cout par age de voiture", ylab="cout", xlab="Age Vehicule",col="red3")
+
+
+##Histogramme presentant la repartition du nombre de sinistres par puissance de vehicule
+base_T<-baseCOU
+hist(base_T$puissance, 
+     main="Nombre de sinistres selon puissance voiture", 
+     xlab="puissance Vehicule", 
+     border="black", 
+     col="red3",
+     
+     las=1, 
+     breaks=7)
+
+##Barplot presentant le nombre de sinistres par puissance de vehicule
+base_T<-baseFREQ
+A<-aggregate(base_T$nbre, by=list(Category=base_T$puissance), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Nbre par puissance de voiture",ylab="Nbre sinistres", xlab="Puissance",col="red3")
+
+
+
+##Barplot presentant le cout de sinistres par puissance de vehicule
+base_T<-baseCOU
+A<-aggregate(base_T$cout, by=list(Category=base_T$puissance), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Cout par puissance de voiture", ylab="cout", xlab="Puissance",col="red3")
+
+
+```
+
+Les voitures les plus communes entre celles des souscrits sont les voitures populaires, de puissance fiscale entre 4 et 8 et d'age entre 1 et 5 ans . Pareiment, les sinistres sont plus fréquents chez les voitures de puissance de véhicule entre 4 et 6, et le cout est le plus elevé pour les voitures populaires et d'age entre 1 et 5 ans. Ceci nous mene a penser que ces variables (age, puissance, marque) peuvent ne pas etre des facteurs directs affectant le nombre de sinistres et le coup. Mais la distribution des couts et de nombre de sinistres sont simplement proportionnels aux distributions des marques, age et puissances des voitures des souscrits. 
+
+## Histogramme des variables liees au assures
+
+```{r}
+
+#Histogramme presentant la frequence de sinistres selon l'age du conducteur
+base_T<-baseCOU
+par(mfrow=c(3,3))
+
+hist(base_T$ageconducteur, 
+     main="Frequence selon l'age du conducteur", 
+     xlab="age", 
+     border="black", 
+     col="red3"
+)
+
+#Barplot presentant le nombre de sinistres selon l'age du conducteur
+base_T<-baseFREQ
+A<-aggregate(base_T$nbre, by=list(Category=base_T$ageconducteur), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Nbre par age",ylab="Nbre sinistres", xlab="Age",col="red3")
+
+#Barplot presentant le cout de sinistres selon l'age du conducteur
+base_T<-baseCOU
+A<-aggregate(base_T$cout, by=list(Category=base_T$ageconducteur), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Cout par Age", ylab="cout", xlab="Age",col="red3")
+
+
+#Histogramme presentant la repartition de sinistres selon la region
+base_T<-baseCOUT
+hist(base_T$region, 
+     main="Repartition selon la region", 
+     xlab="region", 
+     border="black", 
+     col="red3",
+     xlim=c(-1,13),
+     las=1, 
+     breaks=7)
+
+#Barplot presentant le nombre de sinistres selon la region
+base_T<-baseFREQ
+A<-aggregate(base_T$nbre, by=list(Category=base_T$region), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Nbre par Region",ylab="Nbre sinistres", xlab="Region",col="red3")
+
+#Barplot presentant le cout de sinistres par region
+base_T<-baseCOU
+A<-aggregate(base_T$cout, by=list(Category=base_T$region), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Cout par region", ylab="cout", xlab="Region",col="red3")
+
+#Barplot presentant la frequence de sinistres par zone
+base_T<-baseCOU
+A<-table(base_T$zone)
+barplot(A,main ="Frequence par zone",ylab="Frequence", xlab="zone",col="red3")
+
+
+#Barplot presentant la frequence de sinistres par zone
+base_T<-baseFREQ
+A<-aggregate(base_T$nbre, by=list(Category=base_T$zone), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Nbre par zone",ylab="Nbre sinistres", xlab="zone",col="red3")
+
+
+#Barplot presentant le cout de sinistres par zone
+base_T<-baseCOU
+A<-aggregate(base_T$cout, by=list(Category=base_T$zone), FUN=sum)
+barplot(A$x, names.arg=A$Category,main ="Cout par zone", ylab="cout", xlab="zone",col="red3")
+```
+La distribution des ages des souscrits est proportionnelle au cout par age. C'est aussi le cas de la distribution du nombre par région avec le cout par région, et celle du nombre par zone avec le cout par zone.
+On remarque que la zone C à le nombre de sinitres le plus important contrairement à la zone F où le nombre de sinsitres est faible (elle représente un zone moins risquée)
+
+```{r}
+##############Observer la frequence de sinistre################
+
+###########Variable Zone########
+par(mfrow=c(3,3))
+
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+####Observer le nbre de Sinistres par zone 
+##Frequence de zones
+Freq_nbre_zone<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$zone), length)
+Freq_nbre_zone <- data.frame(zone=Freq_nbre_zone$Category,Nbre=Freq_nbre_zone$x)
+
+###Somme des frequences par zone
+frequence_par_zone<-aggregate(as.numeric(baseFREQ$frequence), by=list(Category=baseFREQ$zone), FUN=sum)
+colnames(frequence_par_zone)<-c('zone','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_zone <- merge(Freq_nbre_zone,frequence_par_zone)  
+freq_nbre_par_zone
+
+
+####Calculer le nbre moyen par zone
+freq_nbre_par_zone$NM<-frequence_par_zone$frequence/Freq_nbre_zone$Nbre
+freq_nbre_par_zone$NM
+
+
+####plot le nbre moyen par zone
+plot(freq_nbre_par_zone$zone,freq_nbre_par_zone$NM,type="l",main ="Nbre moyen par zone",ylab="Nbre moyen", xlab="Zone",col='red3',axes=F)
+xlabel <-seq(0,100,by=1)
+axis(1,at = xlabel, las = 1)
+axis(2)
+box()
+
+
+###########Variable Puissance##########
+
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de puissance
+
+Freq_nbre_puissance<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$puissance), length)
+Freq_nbre_puissance <- data.frame(puissance=Freq_nbre_puissance$Category,Nbre=Freq_nbre_puissance$x)
+
+###Somme des frequences par puissance
+frequence_par_puissance<-aggregate(as.numeric(baseFREQ$frequence), by=list(Category=baseFREQ$puissance), FUN=sum)
+colnames(frequence_par_puissance)<-c('puissance','frequence')
+
+####fusionner les deux data frames(Age+frequence de l'age+cout)
+freq_nbre_par_puissance <- merge(Freq_nbre_puissance,frequence_par_puissance)#by.y="Category",by.x="Age")   
+
+
+####Calculer le nbre moyen par puissance
+freq_nbre_par_puissance$NM<-frequence_par_puissance$frequence/Freq_nbre_puissance$Nbre
+
+####plot le nbre moyen par puissance
+plot(freq_nbre_par_puissance$puissance,freq_nbre_par_puissance$NM,type="l",main ="Frequence moyenne par puissance",ylab="Frequence moyenne", xlab="Puissance",col='red3',axes=F)
+xlabel <-seq(0,100,by=1)
+axis(1,at = xlabel, las = 1)
+axis(2)
+box()
+
+
+###########Variable agevehicule###########
+
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de agevehicule
+
+Freq_nbre_ageV<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$agevehicule), length)
+Freq_nbre_ageV <- data.frame(agev=Freq_nbre_ageV$Category,Nbre=Freq_nbre_ageV$x)
+
+###Somme des frequences par agevehicule
+frequence_par_ageV<-aggregate(as.numeric(baseFREQ$frequence), by=list(Category=baseFREQ$agevehicule), FUN=sum)
+colnames(frequence_par_ageV)<-c('agev','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_ageV <- merge(Freq_nbre_ageV,frequence_par_ageV)  
+
+
+####Calculer le nbre moyen par age de vehicule
+freq_nbre_par_ageV$NM<-frequence_par_ageV$frequence/Freq_nbre_ageV$Nbre
+colnames(freq_nbre_par_ageV)
+
+####plot le nbre moyen par age de vehicule
+plot(freq_nbre_par_ageV$agev,freq_nbre_par_ageV$NM,type="l",main ="Nbre moyen par age Vehicule",ylab="Nbre moyen", xlab="Age Vehicule",col='red3',axes=F)
+xlabel <-seq(0,100,by=1)
+axis(1,at = xlabel, las = 1)
+axis(2)
+box()
+
+
+
+
+###########Variable age conducteur##########
+
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de age de conducteur
+Freq_nbre_ageC<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$ageconducteur), length)
+Freq_nbre_ageC <- data.frame(agec=Freq_nbre_ageC$Category,Nbre=Freq_nbre_ageC$x)
+
+###Somme des frequences par age du conducteur
+frequence_par_ageC<-aggregate(as.numeric(baseFREQ$frequence), by=list(Category=baseFREQ$ageconducteur), FUN=sum)
+colnames(frequence_par_ageC)<-c('agec','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_ageC <- merge(Freq_nbre_ageC,frequence_par_ageC)#by.y="Category",by.x="Age")   
+
+
+####Calculer le nbre moyen par age du conducteur
+freq_nbre_par_ageC$NM<-frequence_par_ageC$frequence/Freq_nbre_ageC$Nbre
+colnames(freq_nbre_par_ageC)
+
+####plot le nbre moyen par age du conducteur
+plot(freq_nbre_par_ageC$agec,freq_nbre_par_ageC$NM,type="l",main ="Frequence moyenne des sinistres par age du conducteur",ylab="Frequence moyenne", xlab="Age conducteur",col='red3',axes=F)
+xlabel <-seq(0,100,by=1)
+axis(1,at = xlabel, las = 1)
+axis(2)
+box()
+
+
+
+
+###########Variable marque###########
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de marque
+Freq_nbre_marque<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$marque), length)
+Freq_nbre_marque <- data.frame(marque=Freq_nbre_marque$Category,Nbre=Freq_nbre_marque$x)
+
+###Somme des frequences par marque
+frequence_par_marque<-aggregate(as.numeric(baseFREQ$frequence), by=list(Category=baseFREQ$marque), FUN=sum)
+colnames(frequence_par_marque)<-c('marque','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_marque <- merge(Freq_nbre_marque,frequence_par_marque)
+
+
+####Calculer le nbre moyen par marque
+freq_nbre_par_marque$NM<-frequence_par_marque$frequence/Freq_nbre_marque$Nbre
+colnames(freq_nbre_par_marque)
+
+####plot le nbre moyen par marque
+barplot(freq_nbre_par_marque$NM, names.arg=freq_nbre_par_marque$marque,main ="Frequence moyenne par marque",ylab="Frequence moyenne", xlab="Marque",col='red3')
+
+
+
+
+###########Variable carburant###########
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de carburant
+Freq_nbre_carburant<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$carburant), length)
+Freq_nbre_carburant <- data.frame(carburant=Freq_nbre_carburant$Category,Nbre=Freq_nbre_carburant$x)
+
+###Somme des frequences par carburant
+frequence_par_carburant<-aggregate(as.numeric(baseFREQ$carburant), by=list(Category=baseFREQ$carburant), FUN=sum)
+colnames(frequence_par_carburant)<-c('carburant','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_carburant<- merge(Freq_nbre_carburant,frequence_par_carburant)
+
+####Calculer le nbre moyen par carburant
+freq_nbre_par_carburant$NM<-frequence_par_carburant$frequence/Freq_nbre_carburant$Nbre
+colnames(freq_nbre_par_carburant)
+
+####plot le nbre moyen par carburant
+barplot(freq_nbre_par_carburant$NM, names.arg=freq_nbre_par_carburant$marque,main ="Nbre moyen par carburant",ylab="Nbre moyen", xlab="Carburant",col='red3')
+
+
+
+
+
+###########Variable densite###########
+#### densite est la densite de population dans la commune ou habite le conducteur principal,zone : zone A B C D E ou F,
+###selon la densite en nombre d'habitants par km2 de la commune de residence ,region : code ÃÂ  2 chires donnant les 22 regions
+##franÃ§aises (code INSEE)
+
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de densite
+Freq_nbre_densite<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$densite), length)
+Freq_nbre_densite <- data.frame(densite=Freq_nbre_densite$Category,Nbre=Freq_nbre_densite$x)
+
+###Somme des frequences par densite
+frequence_par_densite<-aggregate(as.numeric(baseFREQ$densite), by=list(Category=baseFREQ$densite), FUN=sum)
+colnames(frequence_par_densite)<-c('densite','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_densite<- merge(Freq_nbre_densite,frequence_par_densite)
+
+
+####Calculer le nbre moyen par densite
+freq_nbre_par_densite$NM<-frequence_par_densite$frequence/Freq_nbre_densite$Nbre
+colnames(freq_nbre_par_densite)
+
+####plot le nbre moyen par densite
+barplot(freq_nbre_par_densite$NM, names.arg=freq_nbre_par_densite$densite,main ="Nbre moyen par densite",ylab="Nbre moyen", xlab="densite",col='red3')
+xlabel <-seq(11,94,by=1)
+axis(1,at = xlabel, las = 1)
+axis(2)
+box()
+
+
+###########Variable region###########
+##Creation de la variable Frequence
+baseFREQ$frequence<-baseFREQ$nbre/baseFREQ$exposition
+
+##Frequence de de regions
+Freq_nbre_region<-aggregate(baseFREQ$nocontrat, by=list(Category=baseFREQ$region), length)
+Freq_nbre_region<- data.frame(region=Freq_nbre_region$Category,Nbre=Freq_nbre_region$x)
+
+###Somme des frequences par region
+
+frequence_par_region<-aggregate(as.numeric(as.factor(baseFREQ$region)), by=list(Category=baseFREQ$region), FUN=sum)
+colnames(frequence_par_region)<-c('region','frequence')
+
+####fusionner les deux data frames
+freq_nbre_par_region<- merge(Freq_nbre_region,frequence_par_region)
+
+####Calculer le nbre moyen par region
+freq_nbre_par_region$NM<-frequence_par_region$frequence/Freq_nbre_region$Nbre
+colnames(freq_nbre_par_region)
+
+####plot le nbre moyen par region 
+barplot(freq_nbre_par_region$NM, names.arg=freq_nbre_par_region$region,main ="Nbre moyen par region",ylab="Nbre moyen", xlab="region",col='red3')
+
+
+```
+
+```{r}
+###############################Choix des variables Tarifaire ##############################
+#Test d'independance entre les variables
+base_T<-baseFREQ
+base_T$cat=base_T$nbre>0 ###creation de la variable CAT
+
+head(base_T)
+
+chisq.test(table(base_T$cat,base_T$agevehicule))
+chisq.test(table(base_T$cat,base_T$agevehicule))$p.value   # 4.59651e-20
+#On rejette l'hypothese nulle d'independance : la survenance depend donc de l'age
+
+chisq.test(table(base_T$cat,base_T$marque))
+chisq.test(table(base_T$cat,base_T$marque))$p.value   # 8.873289e-24
+
+chisq.test(table(base_T$cat,base_T$ageconducteur))
+chisq.test(table(base_T$cat,base_T$ageconducteur))$p.value   #0.000429071
+
+chisq.test(table(base_T$cat,base_T$puissance))
+chisq.test(table(base_T$cat,base_T$puissance))$p.value   # 7.402073e-06
+
+chisq.test(table(base_T$cat,base_T$carburant))
+chisq.test(table(base_T$cat,base_T$carburant))$p.value   #4.78126e-27
+# pas de relation
+
+chisq.test(table(base_T$cat,base_T$densite))
+chisq.test(table(base_T$cat,base_T$densite))$p.value   #2.107586e-27
+
+chisq.test(table(base_T$cat,base_T$region))
+chisq.test(table(base_T$cat,base_T$region))$p.value   #0.01354604
+
+chisq.test(table(base_T$cat,base_T$zone))
+chisq.test(table(base_T$cat,base_T$zone))$p.value   #9.47488e-09
+```
+
+
+
+# Modele Fréquence:
+
+```{r}
+#Ajustement de la loi
+library(vcd)
+N <-baseFREQ$nbre
+#hist(table(N), breaks=50)
+
+###Ajustement avec poisson
+gof <- goodfit(N,type= "poisson",method= "ML") 
+plot(gof,main="ajustement avec la loi de poisson") #Ajustement des frequences de sinistres declarÃ©s par une loi de poisson
+summary(gof)
+
+###Ajustement avec binomiale
+gof1 <- goodfit(N,type= "binomial",method= "ML")
+plot(gof1,main="ajustement avec la loi binomiale")#Ajustement des frequences de sinistres declarÃ©s par une loi binomiale
+summary(gof1)
+
+###Ajustement avec binomiale negative
+gof2 <- goodfit(N,type= "nbinomial",method= "ML")
+plot(gof2,main="ajustement avec la loi binomiale negative")#Ajustement des frequences de sinistres declarÃ©s par une loi binomiale nÃ©gative
+summary(gof2)
+
+###Ajustement avec Zero-inflated-poisson
+library(fitdistrplus) 
+library(gamlss)  
+library(emdbook) 
+library(pscl)
+fit_zip = fitdist(N, 'ZIP',start = list(mu = mean(N), sigma = sd(N)))
+
+###Ajustement avec Zero-inflated-NB
+fit_znb <- zeroinfl(N ~ 1|1,dist="negbin") 
+
+ exp(coef(fit_znb)[1])  ## mu 
+ fit_znb$theta          ## theta 
+ plogis(coef(fit_znb)[2]) ## zprob 
+ fitdistr(N,dzinbinom,start=list(mu= exp(coef(fit_znb)[1]) ,size=length(N),zprob= plogis(coef(fit_znb)[2])))
+
+##Regression GLM
+library(boot)
+library(pscl)
+seuils <- c(11,31,74,94) #seuils choisis  de la variable densite
+seuils2<-c(18,26,40,50,80,100) #seuils choisis de la variable age
+
+##diviser les variables en sous populations
+baseFREQ$cutdensite <- cut(baseFREQ$densite,breaks=seuils,include.lowest=TRUE,right=F)
+baseFREQ$cutAge <- cut(baseFREQ$ageconducteur,breaks=seuils2,include.lowest=TRUE,right=F)
+
+#Fit zero-inflated regression models for count data via maximum likelihood.
+regZI <- zeroinfl(nbre~cutAge+cutdensite |marque ,offset=exposition,data = baseFREQ,dist = "poisson",link="logit")
+regZI<-summary(regZI)
+regZI
+
+##Modele zero
+zero<-as.data.frame(regZI$coefficients[2])
+##Modele Count
+count<-as.data.frame(regZI$coefficients[1])
+count
+```
+
+## Modéle cout
+
+```{r}
+
+##Construction de la base de modelisation des couts Moyen :
+basetarif<-merge(baseFREQ,baseCOU)
+head(basetarif)
+
+##Garder que les couts posiitifs
+basetarif=basetarif[basetarif$cout >0 , ]
+##Calculer la variable cout moyen par nbre de sinistre
+basetarif$CM<-ifelse(basetarif$nbre ==0,basetarif$cout,basetarif$CM<-basetarif$cout/basetarif$nbre) 
+
+#Chercher la loi des couts
+cout <- basetarif$CM
+plot(hist(cout, breaks=500))
+
+library(fitdistrplus)
+##### Ajustement avec la loi lognormal #####
+fit_params_lognormal <- fitdistr(cout,"lognormal")
+quants <-seq(0,1,length=81)[2:80]
+# Find quantiles for the fitted distribution
+fit_quants <- qlnorm(quants,fit_params_lognormal$estimate['meanlog'], fit_params_lognormal$estimate['sdlog'])
+# Find quantiles of the original data
+data_quants <- quantile(cout,quants)
+
+# Fit and data quantiles side by side
+data.frame(fit_quants,data_quants)
+plot(fit_quants, data_quants, xlab="Theoretical Quantiles", ylab="Sample Quantiles")
+title(main = "Q-Q plot of lognormal fit against data")
+abline(0,1)
+
+
+#######Ajustement avec la loi Gamma #######
+fit_params_gamma <- fitdistr(cout/500000,"gamma")
+quants <-seq(0,1,length=81)[2:80]
+
+# Find quantiles for the fitted distribution
+fit_quants <- qgamma(quants,fit_params_gamma$estimate['rate'], fit_params_gamma$estimate['shape'])
+
+# Find quantiles of the original data
+data_quants <- quantile(cout/500000,quants)
+
+#Fit and data quantiles side by side
+data.frame(fit_quants,data_quants)
+plot(fit_quants, data_quants, xlab="Theoretical Quantiles", ylab="Sample Quantiles")
+title(main = "Q-Q plot of gamma fit against data")
+abline(0,1)
+
+
+####### Fit to exponentiel #######
+fit_params_exp<- fitdistr(cout,"exponential")
+quants <-seq(0,1,length=81)[2:80]
+##Definition quantile :les quantiles sont les valeurs qui divisent un jeu de donnees en intervalles contenant le mÃªme nombre de donnees.
+# Find quantiles for the fitted distribution
+fit_quants <- qexp(quants,fit_params_exp$estimate['rate'])
+
+# Find quantiles of the original data
+data_quants <- quantile(cout,quants)
+
+# Fit and data quantiles side by side
+data.frame(fit_quants,data_quants)
+plot(fit_quants, data_quants, xlab="Theoretical Quantiles", ylab="Sample Quantiles")
+title(main = "Q-Q plot of exponential fit against data")
+abline(0,1)
+
+
+# #### Tester les resultats par les test statistiques de conformite de Kolmogrov-Smirnov, Cramer Von Mises et Anderson-Darling
+# ##### Test de kolmogorov-Smirnov 
+ks.test(cout,"pgamma", fit_params_gamma$estimate['rate'], fit_params_gamma$estimate['shape'] )
+##Interpretation
+
+# si lhypothese nulle est vraie (ici H0 : {Fn = Fth}), la probabilite de voir la statistique
+#de test (D = 0.8608) autant eloignee de la valeur 0 est inferieure a <2.2e-16, soit une faible probabilite.
+#Autrement dit, la valeur de D est anormalement grande et donc on ne peut pas accepter lâhypothese nulle.
+#Ceci confirme donc que la loi de probabilite de "cout" n est pas celle d une loi normale.
+
+ks.test(cout,"plnorm",fit_params_lognormal$estimate['sdlog'],fit_params_lognormal$estimate['meanlog']) 
+
+ks.test(cout,"pexp",fit_params_exp$estimate['rate'] )
+
+
+###Test de Cramer Von-mises (Goodness of fit test)
+#install.packages("goftest")
+library(goftest)
+cvm.test(cout, "plnorm", fit_params_lognormal$estimate['sdlog'],fit_params_lognormal$estimate['meanlog'])
+cvm.test(cout, "pgamma" ,fit_params_gamma$estimate['rate'], fit_params_gamma$estimate['shape'])
+cvm.test(cout,"pexp",fit_params_exp$estimate['rate']  )
+
+
+###Test de Anderson-Darling (Goodness of fit test)
+ad.test(cout, "plnorm", fit_params_lognormal$estimate['sdlog'],fit_params_lognormal$estimate['meanlog'])
+ad.test(cout, "pgamma" ,fit_params_gamma$estimate['rate'], fit_params_gamma$estimate['shape'])
+ad.test(cout,"pexp",fit_params_exp$estimate['rate']  )
+
+```
+
+```{r}
+#### GLM COUT
+regression_cout<- glm(CM~marque+carburant+region+zone+ageconducteur+puissance+agevehicule,data=basetarif,family=Gamma(link="log"))
+summary(regression_cout)
+BIC(regression_cout) # 24953.25
+AIC(regression_cout) #24802.76
+```
+
+On peut remarquer que les variables region et ageConducteur ne sont pas significatives, donc elle peuvent etre omises.
+Cela nous ramene a un modele ne dependant que des variables suivantes : marque, carburant, zone.
+
+```{r}
+#### GLM COUT
+regression_cout<- glm(CM~marque+carburant+zone+puissance+agevehicule,data=basetarif,family=Gamma(link="log"))
+summary(regression_cout) #On trouve la valeur AIC: 24863
+BIC(regression_cout) #24919
+AIC(regression_cout) #24863
+```
+
+Modele 1 : AIC = 24802.76
+Model 2 : AIC = 24782.35
+Il y a une amelioration au niveau de la valeur AIC.
+On opte alors pour le deuxieme modele pour la tarification.
